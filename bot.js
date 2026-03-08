@@ -84,6 +84,28 @@ function buildPostResultKeyboard() {
   };
 }
 
+
+// ─── HELPERS ─────────────────────────────────────────────────
+
+function splitMessage(text, maxLen) {
+  maxLen = maxLen || 4000;
+  if (text.length <= maxLen) return [text];
+  var chunks = [];
+  var lines = text.split('\n');
+  var current = '';
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if ((current + '\n' + line).length > maxLen) {
+      if (current) chunks.push(current.trim());
+      current = line;
+    } else {
+      current = current ? current + '\n' + line : line;
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
 // ─── COMMANDS ────────────────────────────────────────────────
 
 bot.onText(/\/start/, (msg) => {
@@ -285,11 +307,17 @@ bot.on("message", async (msg) => {
     const formatted = formatPredictions(predictions);
 
     await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
-    await bot.sendMessage(chatId, formatted, {
-      parse_mode: "MarkdownV2",
-      reply_markup: buildPostResultKeyboard(),
-      disable_web_page_preview: true,
-    });
+
+    // Split into chunks if message exceeds Telegram's 4096 char limit
+    const chunks = splitMessage(formatted, 4000);
+    for (let i = 0; i < chunks.length; i++) {
+      const isLast = i === chunks.length - 1;
+      await bot.sendMessage(chatId, chunks[i], {
+        parse_mode: "MarkdownV2",
+        reply_markup: isLast ? buildPostResultKeyboard() : undefined,
+        disable_web_page_preview: true,
+      });
+    }
   } catch (err) {
     console.error("Prediction error:", err);
     await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
